@@ -15,11 +15,30 @@ void gs_unlock(void) { pthread_mutex_unlock(&mutex); }
    0.1 prototype uses setjmp; replacing this is an explicit 1.0 release gate. */
 typedef union allocation allocation;
 union allocation {
+#if defined(_WIN32)
+  /* MSVC's C headers do not provide max_align_t. Match the Windows heap
+     alignment so advancing past this header preserves malloc alignment. */
+  _Alignas(MEMORY_ALLOCATION_ALIGNMENT) unsigned char alignment;
+#else
   max_align_t alignment;
+#endif
   struct {
     allocation *prev, *next;
   } links;
 };
+#if defined(_WIN32)
+_Static_assert(_Alignof(allocation) >= MEMORY_ALLOCATION_ALIGNMENT,
+               "allocation header must preserve Windows heap alignment");
+_Static_assert(sizeof(allocation) % MEMORY_ALLOCATION_ALIGNMENT == 0,
+               "allocation payload offset must preserve Windows heap alignment");
+#endif
+#ifdef GS_TESTING
+static void check_allocation_alignment(const allocation *a) {
+  assert((uintptr_t)a % _Alignof(allocation) == 0);
+  assert((uintptr_t)(a + 1) % _Alignof(allocation) == 0);
+}
+#endif
+
 typedef struct saved {
   struct saved *next;
   void *address;
@@ -78,6 +97,9 @@ void *gs_alloc(size_t n) {
   if (current->allocations)
     current->allocations->links.prev = a;
   current->allocations = a;
+#ifdef GS_TESTING
+  check_allocation_alignment(a);
+#endif
   return a + 1;
 }
 void gs_free(void *p) {
@@ -112,6 +134,9 @@ void *gs_realloc(void *p, size_t n) {
     current->allocations = b;
   if (b->links.next)
     b->links.next->links.prev = b;
+#ifdef GS_TESTING
+  check_allocation_alignment(b);
+#endif
   return b + 1;
 }
 void *gs_calloc(size_t n, size_t s) {
@@ -208,8 +233,9 @@ long gs_random(void) {
 }
 #define STATE_MODULES(X)                                                                           \
   X(clp)                                                                                           \
-  X(fmalloc) X(giffunc) X(gifread) X(gifunopt) X(gifwrite) X(kcolor) X(merge) X(optimize)          \
-      X(quantize) X(support) X(xform) X(gifsicle)
+  X(fmalloc)                                                                                       \
+  X(giffunc) X(gifread) X(gifunopt) X(gifwrite) X(kcolor) X(merge) X(optimize) X(quantize)         \
+      X(support) X(xform) X(gifsicle)
 #define DECLARE(n) void gs_state_##n(void);
 STATE_MODULES(DECLARE)
 int gs_cli_main(int argc, char **argv);

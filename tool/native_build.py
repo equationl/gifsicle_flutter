@@ -11,7 +11,7 @@ if __name__=='__main__':
   target=out/('gifsicle_flutter.dll' if mode=='library' else 'bridge_test.exe')
   command=['cl','/nologo','/std:c11','/utf-8','/MD','/O2','/DHAVE_CONFIG_H=1','/D_CRT_SECURE_NO_WARNINGS=1',*['/I'+p for p in includes],*sources]
   if mode=='library':command+=['/LD','/Fe:'+str(target)]
-  else:command+=[str(root/'native_test/bridge_test.c'),'/Fe:'+str(target)]
+  else:command+=['/DGS_TESTING=1',str(root/'native_test/bridge_test.c'),'/Fe:'+str(target)]
  else:
   target=out/('libgifsicle_flutter.dylib' if sys.platform=='darwin' else 'libgifsicle_flutter.so') if mode=='library' else out/mode
   command=[os.environ.get('CC','clang'),'-std=c11','-DHAVE_CONFIG_H=1','-g','-fvisibility=hidden',*['-I'+p for p in includes],*sources]
