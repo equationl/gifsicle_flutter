@@ -49,6 +49,8 @@ jobs:
         working-directory: example
       - run: flutter analyze
         working-directory: example
+      - run: flutter test test
+        working-directory: example
       - run: dart test
       - name: Verify generated sources
         if: runner.os == 'macOS'
@@ -136,7 +138,13 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_6
-          script: cd example && flutter test integration_test/gifsicle_integration_test.dart -d emulator-5554 && flutter test integration_test/demo_test.dart -d emulator-5554
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash tool/run_android_integration.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-runtime-logs
+          path: tool/reports/android/
   android-16k-runtime:
     runs-on: ubuntu-latest
     steps:
@@ -154,4 +162,10 @@ jobs:
           target: google_apis_ps16k
           arch: x86_64
           profile: pixel_6
-          script: adb shell getconf PAGE_SIZE | grep -x 16384 && cd example && flutter test integration_test/gifsicle_integration_test.dart -d emulator-5554 && flutter test integration_test/demo_test.dart -d emulator-5554
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash tool/run_android_integration.sh 16k
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-16k-runtime-logs
+          path: tool/reports/android/

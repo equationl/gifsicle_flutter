@@ -1,5 +1,8 @@
 ## 未发布
 
+- 修正 CLI 集成测试的跨平台 GIF 比较，保留画面、时序与元数据验证，避免透明调色板索引差异误报。
+- Android 模拟器测试采用软件 GPU 配置并关闭 Impeller，保留 Flutter 详细日志和 logcat；零测试仍判定失败。
+
 - 修复 MSVC C11 构建缺少 `max_align_t` 导致的 Windows 编译失败，并启用 Windows 分配失败注入与地址对齐检查。
 
 - 完善四平台 demo：25 个 API 场景、CLI 参数编辑、能力检索、GIF 预览和中文功能说明。

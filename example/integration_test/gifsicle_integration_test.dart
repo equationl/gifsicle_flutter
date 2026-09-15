@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'cli_cases.dart';
+import 'gif_comparison.dart';
 
 import 'dart:typed_data';
 
@@ -125,14 +126,26 @@ void main() {
           fail('${c['name']}: $e');
         }
         expect(r.exitCode, c['exitCode'], reason: c['name']);
-        expect(base64Encode(r.stdout), c['expectedStdout'], reason: c['name']);
+        await expectEquivalentOutput(
+          r.stdout,
+          base64Decode(c['expectedStdout'] as String),
+          reason: c['name'] as String,
+        );
         final actual = <String, String>{};
         await for (final f in dir.list()) {
           actual[f.uri.pathSegments.last] = base64Encode(
             await File(f.path).readAsBytes(),
           );
         }
-        expect(actual, c['expectedFiles'], reason: c['name']);
+        final expected = Map<String, dynamic>.from(c['expectedFiles'] as Map);
+        expect(actual.keys, unorderedEquals(expected.keys), reason: c['name']);
+        for (final name in expected.keys) {
+          await expectEquivalentOutput(
+            base64Decode(actual[name]!),
+            base64Decode(expected[name] as String),
+            reason: '${c['name']}: $name',
+          );
+        }
       }
     } finally {
       await dir.delete(recursive: true);

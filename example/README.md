@@ -69,3 +69,6 @@ flutter test integration_test/demo_test.dart -d macos
 
 
 本轮实测（2026-09-15）：macOS、iOS 26.5 模拟器、Android 16 KB 模拟器均通过 25 个场景及响应式界面测试；静态分析通过。Windows 代码与测试已接入，尚无 Windows 主机上的运行结果。
+
+
+CLI 对照测试对文本输出保持字节级比较。GIF 输出若编码字节不同，则独立解码并比较逐帧 RGBA、画布、帧数和时序，同时检查帧区域、交错标志、控制扩展、注释及应用扩展；仅忽略调色板索引/排列、透明像素的不可见 RGB 和 LZW 编码差异。`test/gif_comparison_test.dart` 包含 Windows `--gray` 回归样本及必须拒绝的画面/时序差异。
