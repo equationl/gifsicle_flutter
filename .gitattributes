@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# Preserve upstream bytes and reproducible patch checksums on every platform.
+src/third_party/gifsicle/** -text -whitespace
+tool/patches/** -text -whitespace
+*.gz binary
+*.gif binary
+*.png binary
+*.ico binary
+
+# Two trailing spaces are meaningful Markdown line breaks.
+*.md whitespace=-blank-at-eol

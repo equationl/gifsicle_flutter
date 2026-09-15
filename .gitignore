@@ -1,0 +1,35 @@
+# Editor and operating system files
+.DS_Store
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+
+# Dart / Flutter generated files
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+coverage/
+**/doc/api/
+/pubspec.lock
+
+# Native builds, Python caches and local reports
+.gradle/
+.cxx/
+__pycache__/
+*.py[cod]
+*.log
+*.o
+*.obj
+*.dSYM/
+/tool/reports/
+
+# Local signing and environment configuration
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+key.properties
+local.properties

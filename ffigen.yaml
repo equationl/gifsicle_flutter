@@ -1,0 +1,13 @@
+name: GifsicleBindings
+description: Generated C ABI bindings. Do not edit.
+output: lib/src/bindings/gifsicle_bindings_generated.dart
+headers:
+  entry-points:
+    - src/bridge/gifsicle_bridge.h
+  include-directives:
+    - src/bridge/gifsicle_bridge.h
+functions:
+  include:
+    - 'gs_.*'
+ffi-native:
+  asset-id: package:gifsicle_flutter/src/bindings/gifsicle_bindings_generated.dart

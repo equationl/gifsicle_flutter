@@ -1,0 +1,140 @@
+name: Validate
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - run: python tool/verify_upstream.py
+      - run: python tool/native_build.py test
+      - run: python tool/native_build.py library
+      - run: python tool/check_exported_symbols.py
+      - name: Bounded fuzz (ASan and UBSan)
+        if: runner.os == 'Linux'
+        run: |
+          python tool/native_build.py fuzz
+          mkdir -p build/fuzz-corpus
+          cp test/fixtures/*.gif build/fuzz-corpus/
+          build/native/fuzz -max_total_time=60 -timeout=10 -rss_limit_mb=1024 build/fuzz-corpus
+  flutter:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib hook test example/lib example/integration_test
+      - run: dart analyze
+      - run: flutter pub get
+        working-directory: example
+      - run: flutter analyze
+        working-directory: example
+      - run: dart test
+        if: runner.os != 'Linux'
+      - name: Verify generated sources
+        if: runner.os == 'macOS'
+        run: |
+          dart run ffigen --config ffigen.yaml
+          python tool/generate_cli_manifest.py
+          dart format lib/src/cli_manifest.dart
+          git diff --exit-code -- lib/src/bindings lib/src/cli_manifest.dart tool/cli src/bridge/capabilities.inc
+      - run: flutter build macos --release
+        working-directory: example
+        if: runner.os == 'macOS'
+      - run: flutter test integration_test/gifsicle_integration_test.dart -d macos
+        working-directory: example
+        if: runner.os == 'macOS'
+      - run: flutter test integration_test/demo_test.dart -d macos
+        working-directory: example
+        if: runner.os == 'macOS'
+      - run: flutter build ios --simulator --debug
+        working-directory: example
+        if: runner.os == 'macOS'
+      - run: flutter build ios --release --no-codesign
+        working-directory: example
+        if: runner.os == 'macOS'
+      - run: flutter build windows --release
+        working-directory: example
+        if: runner.os == 'Windows'
+      - run: flutter test integration_test/gifsicle_integration_test.dart -d windows
+        working-directory: example
+        if: runner.os == 'Windows'
+      - run: flutter test integration_test/demo_test.dart -d windows
+        working-directory: example
+        if: runner.os == 'Windows'
+      - uses: actions/setup-java@v4
+        if: runner.os == 'Linux'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        if: runner.os == 'Linux'
+      - run: flutter build apk --release --target-platform android-arm64,android-x64
+        working-directory: example
+        if: runner.os == 'Linux'
+      - run: flutter build appbundle --release --target-platform android-arm64,android-x64
+        working-directory: example
+        if: runner.os == 'Linux'
+      - run: python tool/check_android_alignment.py example/build/app/outputs/flutter-apk/app-release.apk
+        if: runner.os == 'Linux'
+      - name: Blank consumer with only a path dependency
+        run: python tool/verify_consumer.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.os }}
+          path: |
+            tool/reports/
+            example/build/app/outputs/flutter-apk/*.apk
+  android-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: cd example && flutter test integration_test/gifsicle_integration_test.dart -d emulator-5554 && flutter test integration_test/demo_test.dart -d emulator-5554
+  android-16k-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis_ps16k
+          arch: x86_64
+          profile: pixel_6
+          script: adb shell getconf PAGE_SIZE | grep -x 16384 && cd example && flutter test integration_test/gifsicle_integration_test.dart -d emulator-5554 && flutter test integration_test/demo_test.dart -d emulator-5554

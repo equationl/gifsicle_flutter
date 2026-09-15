@@ -1,0 +1,792 @@
+--- a/src/clp.c
++++ b/src/clp.c
+@@ -26,7 +26,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <stdarg.h>
+ #include <ctype.h>
+ #if HAVE_SYS_TYPES_H
+@@ -35,6 +35,8 @@
+ #if HAVE_INTTYPES_H || !defined(HAVE_CONFIG_H)
+ # include <inttypes.h>
+ #endif
++
++
+ 
+ /* By default, assume we have inttypes.h, strtoul, and uintptr_t. */
+ #if !defined(HAVE_STRTOUL) && !defined(HAVE_CONFIG_H)
+@@ -791,6 +793,7 @@
+     Clp_InternOption *iopt;
+     int i;
+     static unsigned opt_generation = 0;
++  gs_state(&opt_generation, sizeof(opt_generation));
+ 
+     if (nopt > cli->nopt) {
+         iopt = (Clp_InternOption *)malloc(sizeof(Clp_InternOption) * nopt);
+@@ -2487,6 +2490,7 @@
+ Clp_CurOptionName(Clp_Parser *clp)
+ {
+     static char buf[256];
++  gs_state(&buf, sizeof(buf));
+     Clp_CurOptionNameBuf(clp, buf, 256);
+     return buf;
+ }
+@@ -2510,3 +2514,7 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_clp(void) {
++}
+--- a/src/fmalloc.c
++++ b/src/fmalloc.c
+@@ -4,6 +4,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <lcdfgif/gif.h>
++
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -19,12 +20,12 @@
+         p = realloc(p, s * n);
+         if (!p) {
+             fprintf(stderr, "%s: Out of memory, giving up\n", program_name);
+-            exit(1);
++            gs_fail(4, "out of memory");
+         }
+         return p;
+     } else {
+         fprintf(stderr, "%s: Out of memory, giving up (huge allocation)\n", program_name);
+-        exit(1);
++        gs_fail(4, "out of memory");
+         return (void*) 0;
+     }
+ }
+@@ -37,3 +38,7 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_fmalloc(void) {
++}
+--- a/src/giffunc.c
++++ b/src/giffunc.c
+@@ -13,6 +13,7 @@
+ #include <lcdfgif/gif.h>
+ #include <string.h>
+ #include <stdarg.h>
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -842,3 +843,8 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_giffunc(void) {
++  gs_state(&all_hooks, sizeof(all_hooks));
++}
+--- a/src/gifread.c
++++ b/src/gifread.c
+@@ -15,8 +15,9 @@
+ #endif
+ #include <lcdfgif/gif.h>
+ #include <stdarg.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <string.h>
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -80,8 +81,9 @@
+     if (i != EOF) {
+         ++grr->pos;
+         return i;
+-    } else
+-        return 0;
++    } else {
++        gs_fail(2, "truncated GIF input");
++    }
+ }
+ 
+ static uint32_t
+@@ -89,7 +91,7 @@
+ {
+     size_t nread = fread(p, 1, s, grr->f);
+     if (nread < s)
+-        memset(p + nread, 0, s - nread);
++        gs_fail(2, "truncated GIF block");
+     grr->pos += nread;
+     return nread;
+ }
+@@ -113,7 +115,7 @@
+     if (grr->pos < grr->length)
+         return grr->v[grr->pos++];
+     else
+-        return 0;
++        gs_fail(2, "truncated GIF record");
+ }
+ 
+ static uint32_t
+@@ -123,7 +125,7 @@
+     memcpy(p, &grr->v[grr->pos], ncopy);
+     grr->pos += ncopy;
+     if (ncopy < s)
+-        memset(p + ncopy, 0, s - ncopy);
++        gs_fail(2, "truncated GIF record block");
+     return ncopy;
+ }
+ 
+@@ -792,6 +794,8 @@
+   Gif_Image *gfi;
+   Gif_Context gfc;
+   int unknown_block_type = 0;
++  int saw_terminator = 0;
++  if (gifeof(grr)) return 0;
+ 
+   if (gifgetc(grr) != 'G' ||
+       gifgetc(grr) != 'I' ||
+@@ -846,6 +850,7 @@
+       break;
+ 
+      case ';': /* terminator */
++      saw_terminator = 1;
+       GIF_DEBUG(("term\n"));
+       goto done;
+ 
+@@ -893,6 +898,7 @@
+   }
+ 
+  done:
++  if (!saw_terminator) gs_fail(2, "GIF terminator missing");
+ 
+   /* Move comments and extensions after last image into stream. */
+   if (gfs && gfi) {
+@@ -977,3 +983,9 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_gifread(void) {
++  gs_state(&default_error_handler, sizeof(default_error_handler));
++  gs_state(&last_name, sizeof(last_name));
++}
+--- a/src/gifsicle.c
++++ b/src/gifsicle.c
+@@ -15,7 +15,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <ctype.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <errno.h>
+ #if HAVE_UNISTD_H
+ # include <unistd.h>
+@@ -24,6 +24,8 @@
+ #ifndef static_assert
+ #define static_assert(x, msg) switch ((int) (x)) case 0: case !!((int) (x)):
+ #endif
++
++
+ 
+ Gt_Frame def_frame;
+ 
+@@ -531,10 +533,15 @@
+               int is_error, const char* message)
+ {
+   static int last_is_error = 0;
++  gs_state(&last_is_error, sizeof(last_is_error));
+   static char last_landmark[256];
++  gs_state(&last_landmark, sizeof(last_landmark));
+   static char last_message[256];
++  gs_state(&last_message, sizeof(last_message));
+   static int different_error_count = 0;
++  gs_state(&different_error_count, sizeof(different_error_count));
+   static int same_error_count = 0;
++  gs_state(&same_error_count, sizeof(same_error_count));
+   char landmark[256];
+   int which_image = Gif_ImageNumber(gfs, gfi);
+   if (gfs && which_image < 0)
+@@ -822,6 +829,7 @@
+   if (unoptimizing)
+     if (!Gif_FullUnoptimize(gfs, GIF_UNOPTIMIZE_SIMPLEST_DISPOSAL)) {
+       static int context = 0;
++  gs_state(&context, sizeof(context));
+       if (!context) {
+         lwarning(name, "GIF too complex to unoptimize\n"
+                  "  (The reason was local color tables or complex transparency.\n"
+@@ -1192,6 +1200,8 @@
+     return 0;
+   }
+ 
++  if (!*extension_type || (is_app && strlen(extension_type) < 11))
++    fatal_error("invalid extension type: application identifiers need 11 bytes");
+   UNCHECKED_MARK_CH(frame, CH_EXTENSION);
+   if (is_app)
+     gfex = Gif_NewExtension(255, extension_type, 11);
+@@ -1358,6 +1368,7 @@
+ redundant_option_warning(const char* opttype)
+ {
+   static int context = 0;
++  gs_state(&context, sizeof(context));
+   if (!context) {
+     warning(0, "redundant %s option\n"
+             "  (The %s option was overridden by another %s option\n"
+@@ -1458,7 +1469,7 @@
+  **/
+ 
+ int
+-main(int argc, char *argv[])
++gs_cli_main(int argc, char *argv[])
+ {
+   /* Check SIZEOF constants (useful for Windows). If these assertions fail,
+      you've used the wrong Makefile. You should've used Makefile.w32 for
+@@ -1468,6 +1479,8 @@
+   static_assert(sizeof(void*) == SIZEOF_VOID_P, "void* has the wrong size.");
+ 
+   clp = Clp_NewParser(argc, (const char * const *)argv, sizeof(options) / sizeof(options[0]), options);
++
++  Clp_SetUTF8(clp, 1);
+ 
+   Clp_AddStringListType
+     (clp, LOOP_TYPE, Clp_AllowNumbers,
+@@ -1886,6 +1899,8 @@
+       break;
+ 
+      case THREADS_OPT:
++      if (!clp->negated && (!clp->have_val || clp->val.u > 1))
++        gs_fail(10, "native internal threading is disabled");
+       if (clp->negated)
+           thread_count = 0;
+       else if (clp->have_val)
+@@ -1918,6 +1933,7 @@
+      }
+ 
+     case COLOR_TRANSFORM_OPT:
++      gs_fail(10, "external commands are not supported in this build");
+       next_output |= 1 << CH_COLOR_TRANSFORM;
+       if (clp->negated)
+         output_transforms = delete_color_transforms
+@@ -1985,8 +2001,10 @@
+               || strcmp(def_output_data.dither_name, "default") != 0))
+         MARK_CH(output, CH_DITHER);
+       UNCHECKED_MARK_CH(output, CH_DITHER);
+-      if (set_dither_type(&def_output_data, name) < 0)
++      if (set_dither_type(&def_output_data, name) < 0) {
+         Clp_OptionError(clp, "%<%s%> is not a valid dither", name);
++        gs_exit(EXIT_USER_ERR);
++      }
+       def_output_data.dither_name = name;
+       break;
+     }
+@@ -2023,7 +2041,7 @@
+       {
+         char* ends;
+         double gamma = strtod(clp->val.s, &ends);
+-        if (*clp->val.s && !*ends && !isspace((unsigned char) *clp->val.s)) {
++        if (*clp->val.s && !*ends && !isspace((unsigned char) *clp->val.s) && isfinite(gamma) && gamma > 0) {
+           MARK_CH(output, CH_GAMMA);
+           def_output_data.colormap_gamma_type = KC_GAMMA_NUMERIC;
+           def_output_data.colormap_gamma = gamma;
+@@ -2031,7 +2049,8 @@
+         }
+       }
+ #endif
+-      Clp_OptionError(clp, "%O not supported");
++      Clp_OptionError(clp, "%O requires a supported color space or finite positive gamma");
++      gs_exit(EXIT_USER_ERR);
+       break;
+     }
+ 
+@@ -2234,3 +2253,40 @@
+   Clp_DeleteParser(clp);
+   return (error_count ? EXIT_ERR : EXIT_OK);
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_gifsicle(void) {
++  gs_state(&def_frame, sizeof(def_frame));
++  gs_state(&frames, sizeof(frames));
++  gs_state(&first_input_frame, sizeof(first_input_frame));
++  gs_state(&nested_frames, sizeof(nested_frames));
++  gs_state(&input, sizeof(input));
++  gs_state(&input_name, sizeof(input_name));
++  gs_state(&unoptimizing, sizeof(unoptimizing));
++  gs_state(&thread_count, sizeof(thread_count));
++  gs_state(&gif_read_flags, sizeof(gif_read_flags));
++  gs_state(&nextfile, sizeof(nextfile));
++  gs_state(&gif_write_info, sizeof(gif_write_info));
++  gs_state(&frames_done, sizeof(frames_done));
++  gs_state(&files_given, sizeof(files_given));
++  gs_state(&warn_local_colormaps, sizeof(warn_local_colormaps));
++  gs_state(&input_transforms, sizeof(input_transforms));
++  gs_state(&output_transforms, sizeof(output_transforms));
++  gs_state(&mode, sizeof(mode));
++  gs_state(&nested_mode, sizeof(nested_mode));
++  gs_state(&infoing, sizeof(infoing));
++  gs_state(&verbosing, sizeof(verbosing));
++  gs_state(&no_ignore_errors, sizeof(no_ignore_errors));
++  gs_state(&next_frame, sizeof(next_frame));
++  gs_state(&frame_option_types, sizeof(frame_option_types));
++  gs_state(&next_input, sizeof(next_input));
++  gs_state(&input_option_types, sizeof(input_option_types));
++  gs_state(&def_output_data, sizeof(def_output_data));
++  gs_state(&active_output_data, sizeof(active_output_data));
++  gs_state(&next_output, sizeof(next_output));
++  gs_state(&active_next_output, sizeof(active_next_output));
++  gs_state(&any_output_successful, sizeof(any_output_successful));
++  gs_state(&output_option_types, sizeof(output_option_types));
++  gs_state(&clp, sizeof(clp));
++  gs_state(&stored_files, sizeof(stored_files));
++}
+--- a/src/gifunopt.c
++++ b/src/gifunopt.c
+@@ -11,8 +11,9 @@
+ # include <config.h>
+ #endif
+ #include <lcdfgif/gif.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <string.h>
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -236,3 +237,7 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_gifunopt(void) {
++}
+--- a/src/gifwrite.c
++++ b/src/gifwrite.c
+@@ -17,9 +17,10 @@
+ #include <lcdfgif/gif.h>
+ #include <stdarg.h>
+ #include <string.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <limits.h>
+ #include "kcolor.h"
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -1212,3 +1213,7 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_gifwrite(void) {
++}
+--- a/src/kcolor.c
++++ b/src/kcolor.c
+@@ -10,12 +10,14 @@
+ #include <config.h>
+ #include "gifsicle.h"
+ #include "kcolor.h"
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <string.h>
+ #include <stdlib.h>
+ #include <limits.h>
+ #include <ctype.h>
+ #include <math.h>
++
++
+ 
+ /* Invariant: (0<=x<256) ==> (srgb_revgamma[srgb_gamma[x] >> 7] <= x). */
+ 
+@@ -136,7 +138,9 @@
+ 
+ const char* kc_debug_str(kcolor x) {
+     static int whichbuf = 0;
++  gs_state(&whichbuf, sizeof(whichbuf));
+     static char buf[8][64];
++  gs_state(&buf, sizeof(buf));
+     whichbuf = (whichbuf + 1) % 8;
+     if (x.a[0] >= 0 && x.a[1] >= 0 && x.a[2] >= 0) {
+         x = kc_revgamma_transform(x);
+@@ -151,6 +155,7 @@
+ void kc_set_gamma(int type, double gamma) {
+     static int cur_type = KC_GAMMA_SRGB;
+     static double cur_gamma = 2.2;
++  gs_state(&cur_gamma, sizeof(cur_gamma));
+     int i, j;
+     uint16_t* g[2];
+ #if !HAVE_POW
+@@ -706,3 +711,11 @@
+         *dist_store = mindist;
+     return result;
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_kcolor(void) {
++  gs_state(&gamma_tables, sizeof(gamma_tables));
++  gs_state(&kchist_sizes, sizeof(kchist_sizes));
++  gs_state(&kd3_sorter, sizeof(kd3_sorter));
++  gs_state(&kd3_item_compares, sizeof(kd3_item_compares));
++}
+--- a/src/kcolor.h
++++ b/src/kcolor.h
+@@ -10,7 +10,7 @@
+ #ifndef GIFSICLE_KCOLOR_H
+ #define GIFSICLE_KCOLOR_H
+ #include <lcdfgif/gif.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ 
+ /* kcolor: a 3D vector, each component has 15 bits of precision */
+ /* 15 bits means KC_MAX * KC_MAX always fits within a signed 32-bit
+--- a/src/merge.c
++++ b/src/merge.c
+@@ -9,12 +9,14 @@
+ 
+ #include <config.h>
+ #include "gifsicle.h"
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <errno.h>
+ #include <limits.h>
+ #include <string.h>
++
++
+ 
+ /* First merging stage: Mark the used colors in all colormaps. */
+ 
+@@ -181,6 +183,7 @@
+  local_colormap_required:
+     if (warn_local_colormaps == 1) {
+         static int context = 0;
++  gs_state(&context, sizeof(context));
+         if (!context) {
+             warning(1, "too many colors, using local colormaps\n"
+                     "  (You may want to try %<--colors 256%>.)");
+@@ -401,3 +404,7 @@
+   Gif_AddImage(dest, desti);
+   return desti;
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_merge(void) {
++}
+--- a/src/optimize.c
++++ b/src/optimize.c
+@@ -10,8 +10,10 @@
+ #include <config.h>
+ #include "gifsicle.h"
+ #include "kcolor.h"
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <string.h>
++
++
+ 
+ typedef int32_t penalty_type;
+ 
+@@ -465,3 +467,16 @@
+     }
+     finalize_optimizer(gfs, optimize_flags);
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_optimize(void) {
++  gs_state(&screen_width, sizeof(screen_width));
++  gs_state(&screen_height, sizeof(screen_height));
++  gs_state(&all_colormap, sizeof(all_colormap));
++  gs_state(&all_colormap_hist, sizeof(all_colormap_hist));
++  gs_state(&in_global_map, sizeof(in_global_map));
++  gs_state(&out_global_map, sizeof(out_global_map));
++  gs_state(&background, sizeof(background));
++  gs_state(&image_index, sizeof(image_index));
++  gs_state(&permuting_sort_values, sizeof(permuting_sort_values));
++}
+--- a/src/quantize.c
++++ b/src/quantize.c
+@@ -10,12 +10,14 @@
+ #include <config.h>
+ #include "gifsicle.h"
+ #include "kcolor.h"
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <string.h>
+ #include <stdlib.h>
+ #include <limits.h>
+ #include <ctype.h>
+ #include <math.h>
++
++
+ 
+ 
+ /* COLORMAP FUNCTIONS return a palette (a vector of Gif_Colors). The
+@@ -413,6 +415,7 @@
+                                uint32_t *histogram)
+ {
+   static int32_t *random_values = 0;
++  gs_state(&random_values, sizeof(random_values));
+ 
+   int width = gfi->width;
+   int dither_direction = 0;
+@@ -550,6 +553,7 @@
+                         uint32_t *histogram)
+ {
+   static int32_t *random_values = 0;
++  gs_state(&random_values, sizeof(random_values));
+   int transparent = gfi->transparent;
+   int i, j, k;
+   kcolor *old_kc;
+@@ -1409,10 +1413,19 @@
+         buf[comma - name] = 0;
+         name = buf;
+     }
+-    for (nparm = 0;
+-         comma && *comma && isdigit((unsigned char) comma[1]);
+-         ++nparm)
+-        parm[nparm] = strtol(&comma[1], (char**) &comma, 10);
++    for (nparm = 0; comma && *comma; ++nparm) {
++        char *end;
++        long value;
++        if (nparm >= 4 || !isdigit((unsigned char) comma[1]))
++            return -1;
++        value = strtol(comma + 1, &end, 10);
++        /* Dimensions and color counts are stored as bytes in the matrix. */
++        if (value < 0 || value > 255 || (*end && *end != ','))
++            return -1;
++        parm[nparm] = (int) value;
++        comma = end;
++    }
++
+ 
+     /* parse dither name */
+     if (od->dither_type == dither_ordered_new)
+@@ -1475,3 +1488,8 @@
+     }
+     return 0;
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_quantize(void) {
++  gs_state(&ordered_dither_lum, sizeof(ordered_dither_lum));
++}
+--- a/src/support.c
++++ b/src/support.c
+@@ -13,8 +13,10 @@
+ #include <stdarg.h>
+ #include <string.h>
+ #include <ctype.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <errno.h>
++
++
+ 
+ const char *program_name = "gifsicle";
+ static int verbose_pos = 0;
+@@ -297,7 +299,9 @@
+ 
+ const char* debug_color_str(const Gif_Color* gfc) {
+     static int whichbuf = 0;
++  gs_state(&whichbuf, sizeof(whichbuf));
+     static char buf[4][8];
++  gs_state(&buf, sizeof(buf));
+     whichbuf = (whichbuf + 1) % 4;
+     snprintf(buf[whichbuf], sizeof(buf[whichbuf]), "#%02X%02X%02X",
+              gfc->gfc_red, gfc->gfc_green, gfc->gfc_blue);
+@@ -524,6 +528,7 @@
+ explode_filename(const char *filename, int number, const char *name, int max_nimages)
+ {
+   static char *s;
++  gs_state(&s, sizeof(s));
+   int l = strlen(filename);
+   l += name ? strlen(name) : 10;
+ 
+@@ -702,11 +707,11 @@
+   parsed_scale_factor_x = strtod_fraction(arg, &val);
+   if (*val == 'x') {
+     parsed_scale_factor_y = strtod_fraction(val + 1, &val);
+-    if (*val == 0)
++    if (*val == 0 && isfinite(parsed_scale_factor_x) && isfinite(parsed_scale_factor_y) && parsed_scale_factor_x > 0 && parsed_scale_factor_y > 0)
+       return 1;
+   } else if (*val == 0) {
+     parsed_scale_factor_y = parsed_scale_factor_x;
+-    return 1;
++    if (isfinite(parsed_scale_factor_x) && parsed_scale_factor_x > 0) return 1;
+   }
+ 
+   if (complain)
+@@ -1151,6 +1156,7 @@
+     if (output_data->background.haspixel) {
+         if (gfs->images[0]->transparent >= 0) {
+             static int context = 0;
++  gs_state(&context, sizeof(context));
+             if (!context) {
+                 warning(1, "irrelevant background color\n"
+                         "  (The background will appear transparent because"
+@@ -1197,6 +1203,7 @@
+     /* Report conflicts. */
+     if (conflict || (want_transparent && gfs->images[0]->transparent < 0)) {
+         static int context = 0;
++  gs_state(&context, sizeof(context));
+         if (!context) {
+             warning(1, "input images have conflicting background colors\n"
+                     "  (This means some animation frames may appear incorrect.)");
+@@ -1781,3 +1788,26 @@
+   blank_frameset(fset, f1, -1, 0);
+   fset->count = f1;
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_support(void) {
++  gs_state(&program_name, sizeof(program_name));
++  gs_state(&verbose_pos, sizeof(verbose_pos));
++  gs_state(&error_count, sizeof(error_count));
++  gs_state(&no_warnings, sizeof(no_warnings));
++  gs_state(&disposal_names, sizeof(disposal_names));
++  gs_state(&frame_spec_1, sizeof(frame_spec_1));
++  gs_state(&frame_spec_2, sizeof(frame_spec_2));
++  gs_state(&frame_spec_name, sizeof(frame_spec_name));
++  gs_state(&dimensions_x, sizeof(dimensions_x));
++  gs_state(&dimensions_y, sizeof(dimensions_y));
++  gs_state(&position_x, sizeof(position_x));
++  gs_state(&position_y, sizeof(position_y));
++  gs_state(&parsed_color, sizeof(parsed_color));
++  gs_state(&parsed_color2, sizeof(parsed_color2));
++  gs_state(&parsed_scale_factor_x, sizeof(parsed_scale_factor_x));
++  gs_state(&parsed_scale_factor_y, sizeof(parsed_scale_factor_y));
++  gs_state(&merger, sizeof(merger));
++  gs_state(&nmerger, sizeof(nmerger));
++  gs_state(&mergercap, sizeof(mergercap));
++}
+--- a/src/xform.c
++++ b/src/xform.c
+@@ -12,7 +12,7 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <ctype.h>
+-#include <assert.h>
++/* assert is supplied by the embedding config; never restore process-aborting assertions. */
+ #include <errno.h>
+ #include <math.h>
+ #include <limits.h>
+@@ -24,6 +24,7 @@
+ # include <sys/types.h>
+ # include <sys/stat.h>
+ #endif
++
+ #ifndef M_PI
+ /* -std=c89 does not define M_PI */
+ # define M_PI           3.14159265358979323846
+@@ -139,79 +140,8 @@
+ void
+ pipe_color_transformer(Gif_Colormap *gfcm, void *thunk)
+ {
+-  int i, status;
+-  FILE *f;
+-  Gif_Color *col = gfcm->col;
+-  Gif_Colormap *new_cm = 0;
+-  char *command = (char *)thunk;
+-#ifdef HAVE_MKSTEMP
+-# ifdef P_tmpdir
+-  char tmp_file[] = P_tmpdir "/gifsicle.XXXXXX";
+-# else
+-  char tmp_file[] = "/tmp/gifsicle.XXXXXX";
+-# endif
+-#else
+-  char *tmp_file = tmpnam(0);
+-#endif
+-  char *new_command;
+-  size_t new_command_sz;
+-
+-#ifdef HAVE_MKSTEMP
+-  {
+-    mode_t old_mode = umask(077);
+-    if (mkstemp(tmp_file) < 0)
+-      fatal_error("can%,t create temporary file!");
+-    umask(old_mode);
+-  }
+-#else
+-  if (!tmp_file)
+-    fatal_error("can%,t create temporary file!");
+-#endif
+-
+-  new_command_sz = strlen(command) + strlen(tmp_file) + 4;
+-  new_command = Gif_NewArray(char, new_command_sz);
+-  snprintf(new_command, new_command_sz, "%s  >%s", command, tmp_file);
+-  f = popen(new_command, "w");
+-  if (!f)
+-    fatal_error("can%,t run color transformation command: %s", strerror(errno));
+-  Gif_DeleteArray(new_command);
+-
+-  for (i = 0; i < gfcm->ncol; i++)
+-    fprintf(f, "%d %d %d\n", col[i].gfc_red, col[i].gfc_green, col[i].gfc_blue);
+-
+-  errno = 0;
+-  status = pclose(f);
+-  if (status < 0) {
+-      error(1, "color transformation error: %s", strerror(errno));
+-      goto done;
+-  } else if (status > 0) {
+-    error(1, "color transformation command failed");
+-    goto done;
+-  }
+-
+-  f = fopen(tmp_file, "r");
+-  if (!f || feof(f)) {
+-    error(1, "color transformation command generated no output", command);
+-    if (f) fclose(f);
+-    goto done;
+-  }
+-  new_cm = read_colormap_file("<color transformation>", f);
+-  fclose(f);
+-
+-  if (new_cm) {
+-    int nc = new_cm->ncol;
+-    if (nc < gfcm->ncol) {
+-      nc = gfcm->ncol;
+-      warning(1, "too few colors in color transformation results");
+-    } else if (nc > gfcm->ncol)
+-      warning(1, "too many colors in color transformation results");
+-    for (i = 0; i < nc; i++)
+-      col[i] = new_cm->col[i];
+-  }
+-
+- done:
+-  remove(tmp_file);
+-  Gif_DeleteColormap(new_cm);
++  (void)gfcm; (void)thunk;
++  gs_fail(10, "external commands are disabled");
+ }
+ 
+ 
+@@ -1280,6 +1210,8 @@
+ resize_dimensions(int* w, int* h, double new_width, double new_height,
+                   int flags)
+ {
++    if (!isfinite(new_width) || !isfinite(new_height))
++        fatal_error("resize dimensions must be finite");
+     if (new_width < 0.5 && new_height < 0.5)
+         /* do nothing */
+         return;
+@@ -1403,3 +1335,7 @@
+     gfs->screen_width = nw;
+     gfs->screen_height = nh;
+ }
++
++/* Request state inventory generated from Clang AST. */
++void gs_state_xform(void) {
++}

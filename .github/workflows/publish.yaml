@@ -1,0 +1,22 @@
+name: Release validation (no upload)
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: flutter pub get
+      - run: python3 tool/verify_upstream.py
+      - run: dart analyze
+      - run: dart test
+      - run: flutter pub publish --dry-run
+        continue-on-error: true # Package licensing is pending; retain dry-run diagnostics.
+      # This workflow validates the package and never uploads it.
