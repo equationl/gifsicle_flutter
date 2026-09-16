@@ -367,105 +367,109 @@ class _ExampleAppState extends State<ExampleApp> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Gifsicle 功能演示'),
-      actions: [
-        IconButton(
-          tooltip: '重新读取版本与能力',
-          onPressed: busy ? null : initialize,
-          icon: const Icon(Icons.refresh),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 850;
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Gifsicle 功能演示'),
+          actions: [
+            IconButton(
+              tooltip: '重新读取版本与能力',
+              onPressed: busy ? null : initialize,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
-      ],
-    ),
-    body: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 850;
-          final content = Expanded(
-            child: SingleChildScrollView(
-              key: PageStorageKey(page),
-              padding: EdgeInsets.all(wide ? 28 : 12),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1050),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        version,
-                        style: Theme.of(context).textTheme.labelLarge,
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = Expanded(
+                child: SingleChildScrollView(
+                  key: PageStorageKey(page),
+                  padding: EdgeInsets.all(wide ? 28 : 12),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1050),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            version,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(height: 16),
+                          if (page == 0)
+                            demoPage()
+                          else if (page == 1)
+                            cliPage()
+                          else
+                            capabilitiesPage(),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      if (page == 0)
-                        demoPage()
-                      else if (page == 1)
-                        cliPage()
-                      else
-                        capabilitiesPage(),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-          return Row(
-            children: [
-              if (wide)
-                NavigationRail(
-                  selectedIndex: page,
-                  labelType: NavigationRailLabelType.all,
-                  onDestinationSelected: busy
-                      ? null
-                      : (v) => setState(() {
-                          page = v;
-                          result = null;
-                        }),
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.auto_awesome),
-                      label: Text('API 演示'),
+              );
+              return Row(
+                children: [
+                  if (wide)
+                    NavigationRail(
+                      selectedIndex: page,
+                      labelType: NavigationRailLabelType.all,
+                      onDestinationSelected: busy
+                          ? null
+                          : (v) => setState(() {
+                              page = v;
+                              result = null;
+                            }),
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.auto_awesome),
+                          label: Text('API 演示'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.terminal),
+                          label: Text('CLI 实验室'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.fact_check),
+                          label: Text('能力与说明'),
+                        ),
+                      ],
                     ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.terminal),
-                      label: Text('CLI 实验室'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.fact_check),
-                      label: Text('能力与说明'),
-                    ),
-                  ],
-                ),
-              content,
-            ],
-          );
-        },
-      ),
-    ),
-    bottomNavigationBar: MediaQuery.sizeOf(context).width >= 850
-        ? null
-        : NavigationBar(
-            selectedIndex: page,
-            onDestinationSelected: busy
-                ? null
-                : (v) => setState(() {
-                    page = v;
-                    result = null;
-                  }),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.auto_awesome),
-                label: 'API 演示',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.terminal),
-                label: 'CLI 实验室',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.fact_check),
-                label: '能力与说明',
-              ),
-            ],
+                  content,
+                ],
+              );
+            },
           ),
+        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: page,
+                onDestinationSelected: busy
+                    ? null
+                    : (v) => setState(() {
+                        page = v;
+                        result = null;
+                      }),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.auto_awesome),
+                    label: 'API 演示',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.terminal),
+                    label: 'CLI 实验室',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.fact_check),
+                    label: '能力与说明',
+                  ),
+                ],
+              ),
+      );
+    },
   );
 }

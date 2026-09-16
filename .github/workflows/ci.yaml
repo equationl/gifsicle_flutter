@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib hook test example/lib example/integration_test
+      - run: dart format --output=none --set-exit-if-changed lib hook test example/lib example/integration_test example/test_driver
       - run: dart analyze
       - run: flutter pub get
         working-directory: example
@@ -133,11 +133,24 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Build test APKs before starting the emulator
+        run: |
+          mkdir -p build/android-integration
+          cd example
+          flutter pub get
+          for suite in gifsicle_integration_test demo_test; do
+            flutter build apk --debug --target-platform android-x64 --target="integration_test/$suite.dart"
+            cp build/app/outputs/flutter-apk/app-debug.apk "../build/android-integration/$suite.apk"
+          done
+          cd android
+          ./gradlew --stop
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096M
+          cores: 2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash tool/run_android_integration.sh
       - uses: actions/upload-artifact@v4
@@ -156,12 +169,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Build test APKs before starting the emulator
+        run: |
+          mkdir -p build/android-integration
+          cd example
+          flutter pub get
+          for suite in gifsicle_integration_test demo_test; do
+            flutter build apk --debug --target-platform android-x64 --target="integration_test/$suite.dart"
+            cp build/app/outputs/flutter-apk/app-debug.apk "../build/android-integration/$suite.apk"
+          done
+          cd android
+          ./gradlew --stop
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis_ps16k
           arch: x86_64
           profile: pixel_6
+          ram-size: 4096M
+          cores: 2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash tool/run_android_integration.sh 16k
       - uses: actions/upload-artifact@v4

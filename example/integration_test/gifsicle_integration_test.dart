@@ -12,7 +12,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:gifsicle_flutter/gifsicle_flutter.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.reportData = {'completedTests': 0};
   testWidgets('packaged native assets transform GIF and keep UI responsive', (
     tester,
   ) async {
@@ -96,6 +97,8 @@ void main() {
       await dir.delete(recursive: true);
       await Gifsicle.disposeForTesting();
     }
+    binding.reportData!['completedTests'] =
+        (binding.reportData!['completedTests'] as int) + 1;
   });
   testWidgets('all 112 CLI parser entries match reference fixtures', (
     tester,
@@ -151,5 +154,7 @@ void main() {
       await dir.delete(recursive: true);
       await Gifsicle.disposeForTesting();
     }
+    binding.reportData!['completedTests'] =
+        (binding.reportData!['completedTests'] as int) + 1;
   });
 }
