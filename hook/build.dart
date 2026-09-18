@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
@@ -13,55 +15,66 @@ void main(List<String> args) async {
       );
     }
     final windows = os == OS.windows;
-    await CBuilder.library(
-      name: 'gifsicle_flutter',
-      assetName: 'src/bindings/gifsicle_bindings_generated.dart',
-      sources: [
-        'src/bridge/gifsicle_bridge.c',
-        'src/bridge/gifsicle_context.c',
-        'src/bridge/gifsicle_files.c',
-        'src/bridge/gifsicle_io.c',
-        for (final name in [
-          'clp',
-          'fmalloc',
-          'giffunc',
-          'gifread',
-          'gifunopt',
-          'gifwrite',
-          'kcolor',
-          'merge',
-          'optimize',
-          'quantize',
-          'support',
-          'xform',
-          'gifsicle',
-        ])
-          'src/third_party/gifsicle/src/$name.c',
-      ],
-      includes: [
-        'src/bridge',
-        'src/third_party/gifsicle/include',
-        'src/third_party/gifsicle/src',
-      ],
-      defines: {
-        'HAVE_CONFIG_H': '1',
-        if (windows) '_CRT_SECURE_NO_WARNINGS': '1',
-      },
-      flags: windows
-          ? ['/std:c11', '/utf-8', '/O2']
-          : [
-              '-std=c11',
-              '-O3',
-              '-fvisibility=hidden',
-              '-Wall',
-              '-Wextra',
-              '-Wno-unused-parameter',
-              if (os == OS.android) ...[
-                '-Wl,-z,max-page-size=16384',
-                '-Wl,-z,common-page-size=16384',
-                '-lm',
+    // MSVC 的编译错误可能写入 stdout，必须保留 FINE 级别输出。
+    final logger = Logger.detached('gifsicle_flutter')..level = Level.ALL;
+    final subscription = logger.onRecord.listen((record) {
+      stderr.writeln(record.message);
+      if (record.error != null) stderr.writeln(record.error);
+      if (record.stackTrace != null) stderr.writeln(record.stackTrace);
+    });
+    try {
+      await CBuilder.library(
+        name: 'gifsicle_flutter',
+        assetName: 'src/bindings/gifsicle_bindings_generated.dart',
+        sources: [
+          'src/bridge/gifsicle_bridge.c',
+          'src/bridge/gifsicle_context.c',
+          'src/bridge/gifsicle_files.c',
+          'src/bridge/gifsicle_io.c',
+          for (final name in [
+            'clp',
+            'fmalloc',
+            'giffunc',
+            'gifread',
+            'gifunopt',
+            'gifwrite',
+            'kcolor',
+            'merge',
+            'optimize',
+            'quantize',
+            'support',
+            'xform',
+            'gifsicle',
+          ])
+            'src/third_party/gifsicle/src/$name.c',
+        ],
+        includes: [
+          'src/bridge',
+          'src/third_party/gifsicle/include',
+          'src/third_party/gifsicle/src',
+        ],
+        defines: {
+          'HAVE_CONFIG_H': '1',
+          if (windows) '_CRT_SECURE_NO_WARNINGS': '1',
+        },
+        flags: windows
+            ? ['/std:c11', '/utf-8', '/O2']
+            : [
+                '-std=c11',
+                '-O3',
+                '-fvisibility=hidden',
+                '-Wall',
+                '-Wextra',
+                '-Wno-unused-parameter',
+                if (os == OS.android) ...[
+                  '-Wl,-z,max-page-size=16384',
+                  '-Wl,-z,common-page-size=16384',
+                  '-lm',
+                ],
               ],
-            ],
-    ).run(input: input, output: output, logger: Logger('gifsicle_flutter'));
+      ).run(input: input, output: output, logger: logger);
+    } finally {
+      await subscription.cancel();
+    }
   });
 }
